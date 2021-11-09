@@ -1,0 +1,15 @@
+[submodule "src/cJSON"]
+	path = src/cJSON
+	url = https://github.com/jyi/cJSON.git
+[submodule "src/pymc3"]
+	path = src/pymc3
+	url = https://github.com/jyi/pymc3.git
+[submodule "src/repair-synthesis"]
+	path = src/synthesis
+	url = https://github.com/jyi/repair-synthesis.git
+[submodule "src/klee"]
+	path = src/klee
+	url = https://github.com/jyi/klee.git
+[submodule "src/synthesis"]
+	path = src/synthesis
+	url = https://github.com/jyi/repair-synthesis.git

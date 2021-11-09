@@ -1,0 +1,66 @@
+diff --git a/Makefile.rules b/Makefile.rules
+index 20e19e2..811314d 100644
+--- a/Makefile.rules
++++ b/Makefile.rules
+@@ -1455,7 +1455,7 @@ ifndef DISABLE_AUTO_DEPENDENCIES
+ #---------------------------------------------------------
+ 
+ DEPEND_OPTIONS = -MMD -MP -MF "$(ObjDir)/$*.d.tmp" \
+-         -MT "$(ObjDir)/$*.o" -MT "$(ObjDir)/$*.d"
++         -MT "$(ObjDir)/$*.o" -MT "$(ObjDir)/$*.d" -std=c++98
+ 
+ # If the build succeeded, move the dependency file over, otherwise
+ # remove it.
+diff --git a/lib/Core/Common.cpp b/lib/Core/Common.cpp
+index c58e121..ce2d206 100644
+--- a/lib/Core/Common.cpp
++++ b/lib/Core/Common.cpp
+@@ -104,7 +104,7 @@ static void klee_vmessage(const char *pfx, bool onlyToFile, const char *msg,
+                           va_list ap) {
+   if (!onlyToFile) {
+     va_list ap2;
+-    va_copy(ap2, ap);
++    __va_copy(ap2, ap);
+     klee_vfmessage(stderr, pfx, msg, ap2);
+     va_end(ap2);
+   }
+diff --git a/runtime/POSIX/stubs.c b/runtime/POSIX/stubs.c
+index 99e2e76..510136d 100644
+--- a/runtime/POSIX/stubs.c
++++ b/runtime/POSIX/stubs.c
+@@ -235,21 +235,27 @@ int strverscmp (__const char *__s1, __const char *__s2) {
+   return strcmp(__s1, __s2); /* XXX no doubt this is bad */
+ }
+ 
+-unsigned int gnu_dev_major(unsigned long long int __dev) __attribute__((weak));
+-unsigned int gnu_dev_major(unsigned long long int __dev) {
++#if __GLIBC_PREREQ(2, 25)
++#define gnu_dev_type dev_t
++#else
++#define gnu_dev_type unsigned long long int
++#endif
++
++unsigned int gnu_dev_major(gnu_dev_type __dev) __attribute__((weak));
++unsigned int gnu_dev_major(gnu_dev_type __dev) {
+   return ((__dev >> 8) & 0xfff) | ((unsigned int) (__dev >> 32) & ~0xfff);
+ }
+ 
+-unsigned int gnu_dev_minor(unsigned long long int __dev) __attribute__((weak));
+-unsigned int gnu_dev_minor(unsigned long long int __dev) {
++unsigned int gnu_dev_minor(gnu_dev_type __dev) __attribute__((weak));
++unsigned int gnu_dev_minor(gnu_dev_type __dev) {
+   return (__dev & 0xff) | ((unsigned int) (__dev >> 12) & ~0xff);
+ }
+ 
+-unsigned long long int gnu_dev_makedev(unsigned int __major, unsigned int __minor) __attribute__((weak));
+-unsigned long long int gnu_dev_makedev(unsigned int __major, unsigned int __minor) {
++gnu_dev_type gnu_dev_makedev(unsigned int __major, unsigned int __minor) __attribute__((weak));
++gnu_dev_type gnu_dev_makedev(unsigned int __major, unsigned int __minor) {
+   return ((__minor & 0xff) | ((__major & 0xfff) << 8)
+-          | (((unsigned long long int) (__minor & ~0xff)) << 12)
+-          | (((unsigned long long int) (__major & ~0xfff)) << 32));
++          | (((gnu_dev_type) (__minor & ~0xff)) << 12)
++          | (((gnu_dev_type) (__major & ~0xfff)) << 32));
+ }
+ 
+ char *canonicalize_file_name (const char *name) __attribute__((weak));

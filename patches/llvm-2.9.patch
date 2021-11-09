@@ -1,0 +1,45 @@
+diff -ruN llvm-2.9/Makefile.rules llvm-2.9-fixed/Makefile.rules
+--- llvm-2.9/Makefile.rules	2019-04-30 20:53:56.347276712 +0900
++++ llvm-2.9-fixed/Makefile.rules	2019-04-30 22:26:39.365120156 +0900
+@@ -1481,7 +1481,7 @@
+ #---------------------------------------------------------
+ 
+ DEPEND_OPTIONS = -MMD -MP -MF "$(ObjDir)/$*.d.tmp" \
+-         -MT "$(ObjDir)/$*.o" -MT "$(ObjDir)/$*.d"
++         -MT "$(ObjDir)/$*.o" -MT "$(ObjDir)/$*.d" -std=c++98
+ 
+ # If the build succeeded, move the dependency file over, otherwise
+ # remove it.
+diff -ruN llvm-2.9/include/llvm/ADT/IntervalMap.h llvm-2.9-fixed/include/llvm/ADT/IntervalMap.h
+--- llvm-2.9/include/llvm/ADT/IntervalMap.h	2019-04-30 20:57:13.426302616 +0900
++++ llvm-2.9-fixed/include/llvm/ADT/IntervalMap.h	2019-04-30 22:26:39.173121177 +0900
+@@ -1970,7 +1970,7 @@
+     CurSize[Nodes] = CurSize[NewNode];
+     Node[Nodes] = Node[NewNode];
+     CurSize[NewNode] = 0;
+-    Node[NewNode] = this->map->newNode<NodeT>();
++    Node[NewNode] = this->map-> template newNode<NodeT>();
+     ++Nodes;
+   }
+ 
+diff -ruN llvm-2.9/include/llvm/ADT/PointerUnion.h llvm-2.9-fixed/include/llvm/ADT/PointerUnion.h
+--- llvm-2.9/include/llvm/ADT/PointerUnion.h	2019-04-30 21:08:20.990878051 +0900
++++ llvm-2.9-fixed/include/llvm/ADT/PointerUnion.h	2019-04-30 22:26:39.173121177 +0900
+@@ -259,7 +259,7 @@
+         ::llvm::PointerUnionTypeSelector<PT1, T, IsInnerUnion,
+           ::llvm::PointerUnionTypeSelector<PT2, T, IsInnerUnion, IsPT3 >
+                                                                    >::Return Ty;
+-      return Ty(Val).is<T>();
++      return Ty(Val).template is<T>();
+     }
+     
+     /// get<T>() - Return the value of the specified pointer type. If the
+@@ -272,7 +272,7 @@
+         ::llvm::PointerUnionTypeSelector<PT1, T, IsInnerUnion,
+           ::llvm::PointerUnionTypeSelector<PT2, T, IsInnerUnion, IsPT3 >
+                                                                    >::Return Ty;
+-      return Ty(Val).get<T>();
++      return Ty(Val).template get<T>();
+     }
+     
+     /// dyn_cast<T>() - If the current value is of the specified pointer type,

@@ -1,0 +1,283 @@
+#!/usr/bin/perl
+#
+# Based on the arguments we try to guess whether to call llvm-gcc or llvm-ld
+# and add necessary paths to Angelix libraries.
+
+use strict;
+use warnings;
+use File::Spec;
+use File::Basename;
+use Text::Trim;
+
+my $angelix_header = $ENV{'ANGELIX_RUNTIME_H'};
+my $libs_klee = $ENV{'ANGELIX_LIBRARY_PATH_KLEE'};
+my $libs_test = $ENV{'ANGELIX_LIBRARY_PATH_TEST'};
+my $libs_cjson = $ENV{'ANGELIX_LIBRARY_PATH_CJSON'};
+my $klee_libs = $ENV{'KLEE_LIBRARY_PATH'};
+
+my $custom_klee_link_flags = "";
+my $custom_klee_compile_flags = "";
+my $custom_test_flags = "";
+
+if ($ENV{'ANGELIX_COMPILER_CUSTOM_KLEE_LINK'}) {
+    $custom_klee_link_flags = $ENV{'ANGELIX_COMPILER_CUSTOM_KLEE_LINK'};
+}
+if ($ENV{'ANGELIX_COMPILER_CUSTOM_KLEE_COMPILE'}) {
+    $custom_klee_compile_flags = $ENV{'ANGELIX_COMPILER_CUSTOM_KLEE_COMPILE'};
+}
+
+
+if ($ENV{'ANGELIX_COMPILER_CUSTOM_TEST'}) {
+    $custom_test_flags = $ENV{'ANGELIX_COMPILER_CUSTOM_TEST'};
+}
+
+sub debug {
+    print STDERR "[angelix-compiler] @_\n";
+}
+
+
+sub message {
+    if ($ENV{'ANGELIX_COMPILER_MESSAGES'}) {
+        my $abs_path = File::Spec->rel2abs($_[0]);
+        if ($abs_path) {
+            my $filename = $ENV{'ANGELIX_COMPILER_MESSAGES'};
+            open(my $fh, '>>', $filename);
+            print $fh "$abs_path\n";
+            close $fh;
+        }
+    }
+}
+
+
+# Assume that command has "-o *.o" or "-c" if and only if it is not linking
+sub get_target() {
+    my $last_o = 0;
+    foreach (@ARGV) {
+        if ($last_o) {
+            return $_;
+        }
+        if (/^-o$/) {
+            $last_o = 1;
+        }
+        if (/^-c$/) {
+            return "";
+        }
+    }
+    return undef;
+}
+
+
+sub get_source {
+    if ($_[0] =~ /\s(\S+\.c)$/) {
+        return $1;
+    }
+    if ($_[0] =~ /\s(\S+\.c)\s/) {
+        return $1;
+    }
+    return "<unknown>";
+}
+
+
+sub wrap_args {
+    return map "\'$_\'", @_;
+}
+
+
+sub transform_link_args {
+    my $args = $_[0];
+    my @trans = ();
+    for my $arg (@$args) {
+        $arg = trim($arg);
+        # debug("arg: ", $arg);
+        if ($arg =~ /\S+\.so$/) {
+            my $so = basename($arg);
+            # debug("so: ", $so);
+            if ($so =~ /^lib\S+/) {
+                my $lib = $so;
+                $lib =~ s/^lib/\-l/;
+                $lib =~ s/\.so$//;
+                # debug("lib: ", $lib);
+                my $path = dirname(File::Spec->rel2abs($arg));
+                # debug("path: ", $path);
+                push(@trans, "-L" . $path);
+                push(@trans, $lib);
+            }
+        } else {
+            push(@trans, $arg);
+        }
+    }
+    # debug("trans: ", @trans);
+    return @trans;
+}
+
+
+sub filter_non_link_args {
+    # The argument that llvm-ld does not understand:
+    my @keys = qw/-static -g -pthread -shared -O -O1 -O2 -O3 -pedantic -std=gnu99 -std=c99 -m64 -mtune=k8 -march=k8 -prune-eh -lm -mtune=core2 -march=core2/;
+    my %non_link_args;
+    @non_link_args{@keys} = ();
+    my @link_args;
+    foreach (@_) {
+        if (/(^-Wl,)|(^-D)|(^-f)|(^-W)|(^-I)/ || exists($non_link_args{$_})) {
+            debug("filtering out non-linking option $_");
+            next;
+        }
+        push @link_args, $_;
+    }
+    return @link_args;
+}
+
+
+sub filter_non_comp_args {
+    my @args = @{$_[0]};
+    my $optimize = $_[1];
+    my @comp_args;
+    foreach (@args) {
+        if (/(^-DPLUGIN_DIR=)|(^-fvisibility=)|(^-fexcess-precision=)|(^-DPHP_ATOM_INC$)|(^-W)/) {
+            #debug("filtering out non-compilaton option $_");
+            next;
+        }
+        if (/(-O1)|(-O2)|(-O3)/ && not $optimize) {
+            #debug("filtering out non-compilaton option $_");
+            next;
+        }
+        push @comp_args, $_;
+    }
+    return @comp_args;
+}
+
+sub fix_llvm_script {
+    my $file = $_[0];
+    if ($file eq '[') {
+        return;
+    }
+
+    open(FILE, "<", $file) || die "File not found";
+    my @lines = <FILE>;
+    close(FILE);
+
+    my $abs_path = File::Spec->rel2abs($file);
+
+    my @newlines;
+    foreach(@lines) {
+        $_ =~ s/$file/$abs_path/g;
+        push(@newlines,$_);
+    }
+
+    open(FILE, ">", $file) || die "File not found";
+    print FILE @newlines;
+    close(FILE);
+}
+
+
+my $compilation_mode;
+
+if ($ARGV[0] eq '--test') {
+    $compilation_mode = "test";
+} elsif ($ARGV[0] eq '--klee') {
+    $compilation_mode = "klee";
+} elsif ($ARGV[0] eq '--frontend') {
+    $compilation_mode = "frontend";
+}  else {
+    print("Usage: angelix-compiler --test ARGS\n",
+          "       angelix-compiler --klee ARGS\n",
+          "       angelix-compiler --frontend ARGS\n");
+    exit 1;
+}
+
+shift @ARGV;
+
+my $target = get_target();
+
+if ($compilation_mode eq "test" || $compilation_mode eq "frontend") {
+
+    my @test_comp_args = filter_non_comp_args(\@ARGV, 1);
+    my @args = ("gcc",
+                "-include $angelix_header",
+                wrap_args(@test_comp_args),
+                "-L$libs_test",
+                "-langelix",
+                "-L$libs_cjson",
+                "-lcjson",
+# in this generic build, runtime component requires this stub library:
+                "-L$klee_libs",
+                "-lkleeRuntest",
+                $custom_test_flags
+        );
+
+    if ($compilation_mode eq "frontend") {
+        push @args, "-D ANGELIX_SYMBOLIC_RUNTIME";
+    }
+
+    my $call_gcc = join(' ', @args);
+    debug($call_gcc);
+    system($call_gcc);
+
+    my $return_code = $?;
+    if ($return_code != 0 && defined($target)) {
+        if ($target) {
+            message($target);
+        } else {
+            message(get_source(join(' ', @test_comp_args)));
+        }
+    } elsif ($return_code != 0) {
+        message("<linking>");
+    }
+    exit($return_code);
+
+} elsif ($compilation_mode eq "klee") {
+
+    if (defined($target) && ($target =~ m/\.o$/ || ! $target)) {
+
+        my @klee_comp_args = filter_non_comp_args(\@ARGV, 0);
+        my @args = ("llvm-gcc",
+                    # it breaks compilation of .s files on openssl:
+                    "-include $angelix_header",
+                    "-emit-llvm",
+                    "-g",
+                    "-O0",
+                    "-D ANGELIX_SYMBOLIC_RUNTIME",
+                    wrap_args(@klee_comp_args),
+                    $custom_klee_compile_flags);
+        my $call_llvm_gcc = join(' ', @args);
+        debug($call_llvm_gcc);
+        system($call_llvm_gcc);
+
+        my $return_code = $?;
+        if ($return_code != 0 && $target) {
+            message($target);
+        } elsif ($return_code != 0) {
+            message(get_source(join(' ', @klee_comp_args)));
+        }
+        exit($return_code);
+
+    } else {
+        my @link_args = filter_non_link_args(@ARGV);
+        @link_args = transform_link_args(\@link_args);
+        my @args = ("llvm-ld",
+                    "--disable-opt",
+                    wrap_args(@link_args),
+                    "-L$libs_klee",
+                    "-langelix",
+                    "-L$libs_cjson",
+                    "-lcjson.klee",
+                    $custom_klee_link_flags);
+        my $call_llvm_ld = join(' ', @args);
+        debug($call_llvm_ld);
+        system($call_llvm_ld);
+
+        my $return_code = $?;
+        if (defined($target) && $return_code != 0) {
+            message($target);
+        }
+
+        if (defined($target) && -e $target) {
+            fix_llvm_script($target) if -e $target;
+            system("angelix-patch-bitcode ${target}.bc") if -e "${target}.bc";
+        }
+
+        exit($return_code);
+
+    }
+
+}

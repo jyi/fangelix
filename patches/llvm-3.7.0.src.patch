@@ -1,0 +1,58 @@
+diff -Naur llvm-3.7.0.src.org/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.cc llvm-3.7.0.src/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.cc
+--- llvm-3.7.0.src.org/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.cc	2019-05-01 21:26:47.399843587 +0900
++++ llvm-3.7.0.src/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.cc	2019-05-01 21:29:24.047042714 +0900
+@@ -544,8 +544,7 @@
+ }
+ #endif
+ 
+-uptr internal_sigaltstack(const struct sigaltstack *ss,
+-                         struct sigaltstack *oss) {
++uptr internal_sigaltstack(const void *ss, void *oss) {
+   return internal_syscall(SYSCALL(sigaltstack), (uptr)ss, (uptr)oss);
+ }
+ 
+diff -Naur llvm-3.7.0.src.org/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.h llvm-3.7.0.src/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.h
+--- llvm-3.7.0.src.org/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.h	2019-05-01 21:26:47.399843587 +0900
++++ llvm-3.7.0.src/projects/compiler-rt/lib/sanitizer_common/sanitizer_linux.h	2019-05-01 21:28:24.871345273 +0900
+@@ -21,7 +21,6 @@
+ #include "sanitizer_platform_limits_posix.h"
+ 
+ struct link_map;  // Opaque type returned by dlopen().
+-struct sigaltstack;
+ 
+ namespace __sanitizer {
+ // Dirent structure for getdents(). Note that this structure is different from
+@@ -30,8 +29,7 @@
+ 
+ // Syscall wrappers.
+ uptr internal_getdents(fd_t fd, struct linux_dirent *dirp, unsigned int count);
+-uptr internal_sigaltstack(const struct sigaltstack* ss,
+-                          struct sigaltstack* oss);
++uptr internal_sigaltstack(const void* ss, void* oss);
+ uptr internal_sigprocmask(int how, __sanitizer_sigset_t *set,
+     __sanitizer_sigset_t *oldset);
+ void internal_sigfillset(__sanitizer_sigset_t *set);
+diff -Naur llvm-3.7.0.src.org/projects/compiler-rt/lib/sanitizer_common/sanitizer_stoptheworld_linux_libcdep.cc llvm-3.7.0.src/projects/compiler-rt/lib/sanitizer_common/sanitizer_stoptheworld_linux_libcdep.cc
+--- llvm-3.7.0.src.org/projects/compiler-rt/lib/sanitizer_common/sanitizer_stoptheworld_linux_libcdep.cc	2019-05-01 21:26:47.399843587 +0900
++++ llvm-3.7.0.src/projects/compiler-rt/lib/sanitizer_common/sanitizer_stoptheworld_linux_libcdep.cc	2019-05-01 21:30:13.018792309 +0900
+@@ -269,7 +269,7 @@
+ 
+   // Alternate stack for signal handling.
+   InternalScopedBuffer<char> handler_stack_memory(kHandlerStackSize);
+-  struct sigaltstack handler_stack;
++  stack_t handler_stack;
+   internal_memset(&handler_stack, 0, sizeof(handler_stack));
+   handler_stack.ss_sp = handler_stack_memory.data();
+   handler_stack.ss_size = kHandlerStackSize;
+diff -Naur llvm-3.7.0.src.org/projects/compiler-rt/lib/tsan/rtl/tsan_platform_linux.cc llvm-3.7.0.src/projects/compiler-rt/lib/tsan/rtl/tsan_platform_linux.cc
+--- llvm-3.7.0.src.org/projects/compiler-rt/lib/tsan/rtl/tsan_platform_linux.cc	2019-05-01 21:26:47.407843546 +0900
++++ llvm-3.7.0.src/projects/compiler-rt/lib/tsan/rtl/tsan_platform_linux.cc	2019-05-01 21:31:11.706492206 +0900
+@@ -369,7 +369,7 @@
+ int ExtractResolvFDs(void *state, int *fds, int nfd) {
+ #if SANITIZER_LINUX
+   int cnt = 0;
+-  __res_state *statp = (__res_state*)state;
++  struct __res_state *statp = (struct __res_state*)state;
+   for (int i = 0; i < MAXNS && cnt < nfd; i++) {
+     if (statp->_u._ext.nsaddrs[i] && statp->_u._ext.nssocks[i] != -1)
+       fds[cnt++] = statp->_u._ext.nssocks[i];

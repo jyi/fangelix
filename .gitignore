@@ -1,0 +1,16 @@
+build
+__pycache__/
+*~
+*.bak
+TAGS
+*.log
+*.img
+**/.mypy_cache
+tests/criu/checkpoint/stats-dump
+*.o
+*.a
+GPATH
+GRTAGS
+GTAGS
+.angelix
+*.patch

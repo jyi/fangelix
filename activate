@@ -1,0 +1,103 @@
+if [[ `uname -m` != "x86_64" ]]; then
+    echo "Error: Angelix supports only x86_64"
+    exit 1
+fi
+
+if [[ "$(lsb_release -si)" == "Ubuntu" ]]; then
+    export LD_LIBRARY_PATH=/usr/lib/jvm/java-8-openjdk-amd64/jre/lib/amd64:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+    export C_INCLUDE_PATH=/usr/include/x86_64-linux-gnu
+    export CPLUS_INCLUDE_PATH=/usr/include/x86_64-linux-gnu
+else
+    echo "WARNING: add your system libraries to C_INCLUDE_PATH, CPLUS_INCLUDE_PATH and LD_LIBRARY_PATH"
+fi
+
+export ANGELIX_ROOT=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+
+# locations of submodules:
+
+export LLVM_GCC_DIR="$ANGELIX_ROOT/build/llvm-gcc4.2-2.9-x86_64-linux"
+export LLVM2_DIR="$ANGELIX_ROOT/build/llvm-2.9"
+export LLVM3_DIR="$ANGELIX_ROOT/build/llvm-3.7.0.src"
+export LLVM3_6_1_DIR="/build/llvm-3.6.1.src"
+export CLANG_HEADERS="$LLVM3_DIR/tools/clang/lib/Headers/"
+export LLVM3_INCLUDE_PATH="$ANGELIX_ROOT/build/include"
+export STP_DIR="$ANGELIX_ROOT/build/stp"
+export MINISAT_DIR="$ANGELIX_ROOT/build/minisat"
+export Z3_DIR="$ANGELIX_ROOT/build/z3"
+export Z3_JAR="$Z3_DIR/build/com.microsoft.z3.jar"
+export Z3_2_19_DIR="$ANGELIX_ROOT/build/z3_2_19" # used for semfix
+export KLEE_DIR="$ANGELIX_ROOT/src/klee"
+export KLEE_INCLUDE_PATH="$KLEE_DIR/include"
+export KLEE_LIBRARY_PATH="$KLEE_DIR/Release+Asserts/lib"
+export KLEE_UCLIBC_DIR="$ANGELIX_ROOT/build/klee-uclibc"
+export ZESTI_DIR="$ANGELIX_ROOT/src/zesti"
+export ZESTI_BIN="$ZESTI_DIR/Release+Asserts/bin"
+export KATCH_DIR="$ANGELIX_ROOT/src/katch"
+export KATCH_BIN="$KATCH_DIR/Release+Asserts/bin"
+export BEAR_DIR="$ANGELIX_ROOT/build/Bear"
+export MAXSMT_DIR="$ANGELIX_ROOT/build/maxsmt-playground"
+export MAXSMT_JAR="$MAXSMT_DIR/target/scala-2.10/maxsmt-playground_2.10-1.1.jar"
+export SYNTHESIS_DIR="$ANGELIX_ROOT/src/synthesis"
+export SYNTHESIS_JAR="$SYNTHESIS_DIR/target/scala-2.10/repair-maxsat-assembly-1.0.jar"
+export NSYNTH_JAR="$ANGELIX_ROOT/src/nsynth/target/nsynth-1.0-jar-with-dependencies.jar"
+export LOCAL_PERL_ROOT="$ANGELIX_ROOT/build/perl"
+export PYMC3_DIR="$ANGELIX_ROOT/src/pymc3"
+export CJSON_INCLUDE_PATH="$ANGELIX_ROOT/src/cJSON"
+
+# envorinment for building and execution:
+
+export PATH="$LLVM_GCC_DIR/bin/:$PATH"
+export PATH="$LLVM2_DIR/Release+Asserts/bin/:$PATH"
+export PATH="$KLEE_DIR/Release+Asserts/bin/:$PATH"
+export PATH="$Z3_DIR/build/:$PATH"
+export PATH="$Z3_2_19_DIR/bin/:$PATH"
+export PATH="$ANGELIX_ROOT/src/tools:$PATH"
+export PATH="$ANGELIX_ROOT/build/bin/:$PATH"
+export NUM_OF_CPU="72"
+
+export ANGELIX_LIBRARY_PATH_KLEE="$ANGELIX_ROOT/build/lib/klee"
+export ANGELIX_LIBRARY_PATH_TEST="$ANGELIX_ROOT/build/lib/test"
+export ANGELIX_LIBRARY_PATH_CJSON="$ANGELIX_ROOT/build/lib/cJSON"
+export ANGELIX_RUNTIME_H="$ANGELIX_ROOT/src/runtime/runtime.h"
+
+# to run tests when linked with runtime:
+export LD_LIBRARY_PATH="$KLEE_LIBRARY_PATH:$LD_LIBRARY_PATH"
+# because I didn't manage to build stp statically:
+export LD_LIBRARY_PATH="$STP_DIR/build/lib:$LD_LIBRARY_PATH"
+
+# for Z3 bindings:
+export LD_LIBRARY_PATH="$Z3_DIR/build/:$LD_LIBRARY_PATH"
+export PYTHONPATH="$Z3_DIR/build/:$PYMC3_DIR:$PYTHONPATH"
+
+ulimit -s unlimited
+
+mkdir -p $ANGELIX_ROOT/build
+mkdir -p $ANGELIX_ROOT/build/bin
+mkdir -p $ANGELIX_ROOT/build/include
+
+# utilities for testing:
+
+dump-ast () {
+    "$LLVM3_DIR/build/bin/clang" -Xclang -ast-dump -fdiagnostics-color=never -fsyntax-only "$1"
+}
+
+instr-rep () {
+    instrument-repairable "$1" -- "-I$LLVM3_DIR/build/lib/clang/3.7.0/include" -include "$ANGELIX_RUNTIME_H" -D ANGELIX_INSTRUMENTATION
+}
+
+instr-sus () {
+    ANGELIX_EXTRACTED='./extracted' instrument-suspicious "$1" -- "-I$LLVM3_DIR/build/lib/clang/3.7.0/include"
+}
+
+# environment for SEMFIX
+export SEMFIX_ROOT="$ANGELIX_ROOT/src/semfix"
+export PATH="$ANGELIX_ROOT/build/perl/bin${PATH+:}${PATH}"
+export PERL5LIB="$ANGELIX_ROOT/build/perl/lib/perl5${PERL5LIB+:}${PERL5LIB}"
+export PERL_LOCAL_LIB_ROOT="$ANGELIX_ROOT/build/perl${PERL_LOCAL_LIB_ROOT+:}${PERL_LOCAL_LIB_ROOT}"
+export PERL_MB_OPT="--install_base \"$ANGELIX_ROOT/build/perl\""
+export PERL_MM_OPT="INSTALL_BASE=$ANGELIX_ROOT/build/perl"
+
+# environment for CRIU
+export CRIU_ROOT="$ANGELIX_ROOT/build/criu"
+export PATH="$CRIU_ROOT/criu:$CRIU_ROOT/crit:$PATH"
+export LD_LIBRARY_PATH="$CRIU_ROOT/lib/c/:$LD_LIBRARY_PATH"

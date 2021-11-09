@@ -1,0 +1,169 @@
+#!/bin/bash
+
+exe="$1"
+shift
+
+if [ -n "$ANGELIX_RUN_EXECUTIONS" ]; then
+    echo -n 1 >> "$ANGELIX_RUN_EXECUTIONS"
+fi
+
+rm -rf "$ANGELIX_KLEE_WORKDIR"/klee-out-*
+rm -rf "$(dirname "$exe")"/klee-out-*
+
+export ANGELIX_SYMBOLIC_RUNTIME=ON
+
+if [ -z ${KLEE_RUN_MODE+x} ]; then
+    echo "[angelix-run-klee] KLEE_RUN_MODE is not defined"
+    exit 1
+fi
+
+case ${KLEE_RUN_MODE} in
+    KLEE)
+        KLEE_CMD="klee"
+        ;;
+    KLEE_SP)
+        KLEE_CMD="klee -max-forks=0"
+        ;;
+    ZESTI)
+        KLEE_CMD="$ZESTI_BIN/klee --zest -use-symbex=0"
+        ;;
+    *)
+        echo "[angelix-run-klee] Unknown KLEE_RUN_MODE: ${KLEE_RUN_MODE}"
+        exit 1
+esac
+
+if [ -z $ANGELIX_KLEE_SEARCH ]; then
+    search_arg=""
+else
+    search_arg="--search=$ANGELIX_KLEE_SEARCH"
+fi
+
+if [ -z "$ANGELIX_KLEE_LOAD" ]; then
+    load_arg=""
+else
+    load_arg="$ANGELIX_KLEE_LOAD"
+fi
+
+if [ ${KLEE_RUN_MODE:-x} == "KLEE_SP" ] || [ -z ${ANGELIX_KLEE_MAX_FORKS} ]; then
+    forks_arg=""
+else
+    forks_arg="-max-forks=$ANGELIX_KLEE_MAX_FORKS"
+fi
+
+if [ -z ${GOBLE_KLEE_MESSAGE:+x} ]; then
+    message_arg=""
+else
+    message_arg="-gobble-klee-message"
+fi
+
+if [ -z $ANGELIX_KLEE_MAX_DEPTH ]; then
+    depth_arg=""
+else
+    depth_arg="-max-depth=$ANGELIX_KLEE_MAX_DEPTH"
+fi
+
+if [ -z $ANGELIX_KLEE_MAX_TIME ]; then
+    time_arg=""
+else
+    time_arg="-watchdog -max-time=$ANGELIX_KLEE_MAX_TIME"
+fi
+
+if [ -z $ANGELIX_KLEE_MAX_SOLVER_TIME ]; then
+    solver_time_arg=""
+else
+    solver_time_arg="-max-solver-time=$ANGELIX_KLEE_MAX_SOLVER_TIME"
+fi
+
+if [ -z $ANGELIX_KLEE_DEBUG ]; then
+    debug_arg=""
+else
+    debug_arg="-debug-print-instructions"
+fi
+
+# synthesizer specific args
+if [ -z $ANGELIX_USE_SEMFIX_SYN ]; then
+    # angelix
+    syn_arg="-smtlib-human-readable"
+else
+    # semfix
+    syn_arg=""
+fi
+
+rm -f klee.log
+
+left=$(echo $@ | cut -d ">" -f 1 | tr -s " ")
+right=$(echo $@ | cut -d ">" -f 2 | tr -s " ")
+
+if [ "$left" == "$right" ]; then
+    redirection=0
+    klee_args="$search_arg $forks_arg $depth_arg $time_arg $solver_time_arg \
+$message_arg $debug_arg \
+$syn_arg $load_arg \
+-write-smt2s \
+--libc=uclibc \
+--posix-runtime \
+-allow-external-sym-calls \
+${exe}.patched.bc \
+$@"
+else
+    redirection=1
+    klee_args="$search_arg $forks_arg $depth_arg $time_arg $solver_time_arg \
+$message_arg $debug_arg \
+$syn_arg $load_arg \
+-write-smt2s \
+--libc=uclibc \
+--posix-runtime \
+-allow-external-sym-calls \
+${exe}.patched.bc \
+$left > $right"
+fi
+
+if [ -z ${GOBLE_KLEE_MESSAGE:+x} ]; then
+    echo "$KLEE_CMD $klee_args" | tee -a klee.log
+else
+    echo "$KLEE_CMD $klee_args" >> klee.log
+fi
+
+if [ $redirection -eq 0 ]; then
+    $KLEE_CMD $search_arg $forks_arg $depth_arg $time_arg $solver_time_arg \
+              $message_arg $debug_arg $syn_arg $load_arg \
+              -write-smt2s \
+              --libc=uclibc \
+              --posix-runtime \
+              -allow-external-sym-calls \
+              "${exe}.patched.bc" \
+              "$@" \
+              2>&1 | tee -a klee.log
+    echo "[angelix-run-klee] klee is terminated" >> klee.log
+    for id in $(pgrep lli)
+    do
+        kill -9 $id
+    done
+else
+    $KLEE_CMD $search_arg $forks_arg $depth_arg $time_arg $solver_time_arg \
+              $message_arg $debug_arg $syn_arg $load_arg \
+              -write-smt2s \
+              --libc=uclibc \
+              --posix-runtime \
+              -allow-external-sym-calls \
+              "${exe}.patched.bc" \
+              $left > $right
+    echo "[angelix-run-klee] klee is terminated" >> klee.log
+    for id in $(pgrep lli)
+    do
+        kill -9 $id
+    done
+fi
+
+klee_exit_code=${PIPESTATUS[0]}
+
+mv klee.log "$ANGELIX_KLEE_WORKDIR"
+
+mv "$(dirname "$exe")"/klee-out-* "$ANGELIX_KLEE_WORKDIR"
+
+if [ $KLEE_RUN_MODE == "KLEE_SP" ]; then
+    exit $klee_exit_code
+else
+    # it makes sence to return 0 so that the test can proceed
+    exit 0
+fi

@@ -1,0 +1,66 @@
+#!/bin/ksh
+
+ACT_OUT=${ANGELIX_ACT_OUT:-`mktemp`}
+EXP_OUT=`mktemp`
+COST=${ANGELIX_COST_FILE:-`mktemp`}
+
+assert_equal () {
+    ${ANGELIX_RUN:-eval} $1 > $ACT_OUT
+    echo -ne "$2" > $EXP_OUT
+
+    diff -q <(cat $ACT_OUT) <(cat $EXP_OUT) > /dev/null
+    if [ $? -ne 0 ]; then
+        cal_diff
+    else
+        exit 0
+    fi
+}
+
+cal_diff () {
+    l1=$(cat $ACT_OUT |wc -l)
+    l2=$(cat $EXP_OUT |wc -l)
+    (( line_diff = abs(l2 - l1) ))
+    if [ $line_diff -ne 0 ]; then
+        echo "$line_diff" > $COST
+        return $line_diff
+    fi
+
+    # echo "[oracle] equal line nubmers"
+
+    arr1=()
+    while IFS= read -r line
+    do
+        arr1+=("$line")
+    done < $ACT_OUT
+
+    arr2=()
+    while IFS= read -r line
+    do
+        arr2+=("$line")
+    done < $EXP_OUT
+
+    delta=0
+    for i in ${arr1[@]};
+    do
+        (( delta = abs(${arr1[i]} - ${arr2[i]}) + $delta ))
+    done
+
+    (( ret = tanh($delta) ))
+    echo "$ret" > $COST
+    return 1
+}
+
+case "$1" in
+    1)
+        assert_equal "./test 2" '1\n0\n'
+        ;;
+    2)
+        assert_equal "./test 3" '2\n1\n0\n'
+        ;;
+    3)
+        assert_equal "./test 4" '3\n2\n1\n0\n'
+        ;;
+    4)
+        assert_equal "./test 100" '99\n98\n97\n96\n95\n94\n93\n92\n91\n90\n89\n88\n87\n86\n85\n84\n83\n82\n81\n80\n79\n78\n77\n76\n75\n74\n73\n72\n71\n70\n69\n68\n67\n66\n65\n64\n63\n62\n61\n60\n59\n58\n57\n56\n55\n54\n53\n52\n51\n50\n49\n48\n47\n46\n45\n44\n43\n42\n41\n40\n39\n38\n37\n36\n35\n34\n33\n32\n31\n30\n29\n28\n27\n26\n25\n24\n23\n22\n21\n20\n19\n18\n17\n16\n15\n14\n13\n12\n11\n10\n9\n8\n7\n6\n5\n4\n3\n2\n1\n0\n'
+        ;;
+esac
