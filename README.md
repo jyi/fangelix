@@ -4,7 +4,9 @@ FAngelix is a program repair tool for C programs. It is an extension of [Angelix
 
 ## Installation ##
 
-The installation steps can be identified with the provided [Dockerfile](https://github.com/jyi/fangelix/edit/master/Dockerfile).
+The installation steps can be identified with the provided [Dockerfile](https://github.com/jyi/fangelix/edit/master/Dockerfile). A Docker container can also be obtained as follows:
+
+    docker pull jayyi/fangelix:2021-Nov-09
 
 ## Running FAngelix ##
 
