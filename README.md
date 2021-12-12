@@ -14,14 +14,14 @@ Before running FAngelix, make sure to run the following to set FAngelix environm
 
     . activate
     
-FAngelix is implemented as an extension of Angelix, keeping the same command-line interface of Angelix. Let's fix a buggy source code, [test.c](https://github.com/jyi/angelix/blob/fangelix-release/tests/loop-condition/src/test.c), available in the test/loop-condition directory with FAngelix as follows. 
+FAngelix is implemented as an extension of Angelix, keeping the same command-line interface of Angelix. Let's fix a buggy source code, [test.c](tests/loop-condition/src/test.c), available in the test/loop-condition directory with FAngelix as follows. 
 
     # Assume that we are in the root directory of fangelix.
     cd tests/loop-condition
     angelix src test.c oracle 1 2 3
 
 
-The first parameter, `src`, describes the directory where the buggy source code `test.c` is located. The [`oracle`](https://github.com/jyi/angelix/blob/fangelix-release/tests/loop-condition/oracle) and `1 2 3` describe a test script and test IDs. FAngelix performs a guided search based on the cost of executions and the [`oracle`](https://github.com/jyi/angelix/blob/fangelix-release/tests/loop-condition/oracle) contains a cost function named `cal_diff`. If a cost function is not provided, FAngelix performs without a cost function. For the above example, FAngelix will finish with output similar to the following:
+The first parameter, `src`, describes the directory where the buggy source code `test.c` is located. The [`oracle`](tests/loop-condition/oracle) and `1 2 3` describe a test script and test IDs. FAngelix performs a guided search based on the cost of executions and the [`oracle`](tests/loop-condition/oracle) contains a cost function named `cal_diff`. If a cost function is not provided, FAngelix performs without a cost function. For the above example, FAngelix will finish with output similar to the following:
 
 
     INFO     synthesis       fixing expression (30, 10, 30, 14): (n > 1) ---> (n >= 1)
@@ -42,7 +42,7 @@ FAngelix by default fixes two defect classes: if conditions and loop conditions.
     cd tests/assignment-if
     angelix src test.c oracle 1 2 3 --assert assert.json --defect assignments
 
-When fixing an assignment, FAngelix uses symbolic execution tool KLEE and the expected output needs to be specified separately in the `assert.json` file. For a detailed description, please refer to the [tutorial of Angelix](https://github.com/jyi/angelix/blob/fangelix-release/doc/Tutorial.md). For the second [example](https://github.com/jyi/angelix/blob/fangelix-release/tests/assignment-if/src/test.c), FAngelix will finish with output similar to the following:
+When fixing an assignment, FAngelix uses symbolic execution tool KLEE and the expected output needs to be specified separately in the `assert.json` file. For a detailed description, please refer to the [tutorial of Angelix](https://github.com/jyi/angelix/blob/fangelix-release/doc/Tutorial.md). For the second [example](tests/assignment-if/src/test.c), FAngelix will finish with output similar to the following:
 
     INFO     synthesis       fixing expression (13, 7, 13, 11): (a + b) ---> (a - b)
     INFO     repair          candidate fix synthesized
