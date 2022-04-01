@@ -2,6 +2,18 @@
 
 FAngelix is a program repair tool for C programs. It is an extension of [Angelix](https://github.com/mechtaev/angelix), a constraint-based (semantics-based) repair tool. FAngelix uses a guided search algorithm based on [MCMC \(Markov Chain Monte Carlo\) sampling](https://en.wikipedia.org/wiki/Markov_chain_Monte_Carlo) and is generally faster than Angelix.
 
+If you use FAngelix in your research project, please include the following citation:
+
+    @article{yi2022fangelix,
+      title={Speeding up constraint-based program repair using a search-based technique},
+      author={Yi, Jooyong and Ismayilzada, Elkhan},
+      journal={Information and Software Technology},
+      volume={146},
+      pages={106865},
+      year={2022},
+      publisher={Elsevier}
+    }
+
 ## Installation ##
 
 The installation steps can be identified with the provided [Dockerfile](https://github.com/jyi/fangelix/edit/master/Dockerfile). A Docker container can also be obtained as follows:
